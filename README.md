@@ -46,3 +46,48 @@ Certainly! The network automation team plays a crucial role in modern IT environ
     - **Minimized Downtime:** Faster and more accurate changes result in reduced downtime, minimizing the potential financial impact of network disruptions.
 
 In summary, the network automation team brings immense value by enhancing efficiency, reducing risk, ensuring consistency, and contributing to the overall agility and effectiveness of the network infrastructure.
+
+
+# Variables
+$resourceGroupName = "<YourResourceGroupName>"
+$location = "<AzureRegion>"
+$vmName = "<VMName>"
+$adminUsername = "<YourAdminUsername>"
+$adminPassword = "<YourAdminPassword>"
+$vmSize = "<VMSize>"
+$imageOffer = "UbuntuServer"
+$imageSku = "20.04-LTS"
+
+# Create a new resource group
+New-AzResourceGroup -Name $resourceGroupName -Location $location
+
+# Create a new virtual network
+$vnet = New-AzVirtualNetwork -ResourceGroupName $resourceGroupName -Name "${vmName}-vnet" -AddressPrefix "10.0.0.0/16" -Location $location
+
+# Create a subnet
+$subnet = Add-AzVirtualNetworkSubnetConfig -Name "default" -AddressPrefix "10.0.0.0/24" -VirtualNetwork $vnet
+
+# Update the virtual network
+$vnet | Set-AzVirtualNetwork
+
+# Define the public IP address
+$publicIP = New-AzPublicIpAddress -ResourceGroupName $resourceGroupName -Name "${vmName}-publicip" -AllocationMethod Dynamic -Location $location
+
+# Define the NIC
+$nic = New-AzNetworkInterface -Name "${vmName}-nic" -ResourceGroupName $resourceGroupName -Location $location -SubnetId $vnet.Subnets[0].Id -PublicIpAddressId $publicIP.Id
+
+# Define the VM configuration
+$vmConfig = New-AzVMConfig -VMName $vmName -VMSize $vmSize
+$vmConfig = Set-AzVMOperatingSystem -VM $vmConfig -Linux -ComputerName $vmName -Credential (Get-Credential -UserName $adminUsername -Message "Enter your password")
+
+# Choose an image
+$image = Get-AzVMImageOffer -Location $location -PublisherName "Canonical" -Offer $imageOffer | Get-AzVMImageSku -Sku $imageSku | Sort-Object -Property Version -Descending | Select-Object -First 1
+
+# Add the image to the VM configuration
+$vmConfig = Set-AzVMSourceImage -VM $vmConfig -Id $image.Id
+
+# Add the NIC to the VM configuration
+$vmConfig = Add-AzVMNetworkInterface -VM $vmConfig -Id $nic.Id
+
+# Create the VM
+New-AzVM -ResourceGroupName $resourceGroupName -Location $location -VM $vmConfig
