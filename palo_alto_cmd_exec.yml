@@ -1,0 +1,36 @@
+---
+- name: Login to Palo Alto API and Generate Command Output
+  hosts: localhost
+  gather_facts: no
+
+  vars:
+    firewall_ip: "your_firewall_ip"
+    username: "your_username"
+    password: "your_password"
+    api_key: ""  # This will be set dynamically after login
+    command: "/api/your_command"  # Replace "your_command" with the actual command
+
+  tasks:
+    - name: Authenticate with Palo Alto API
+      uri:
+        url: "https://{{ firewall_ip }}/api/?type=keygen&user={{ username }}&password={{ password }}"
+        method: GET
+        validate_certs: no
+      register: login_response
+
+    - name: Set API Key
+      set_fact:
+        api_key: "{{ login_response.json.key }}"
+      
+    - name: Execute Command
+      uri:
+        url: "https://{{ firewall_ip }}/{{ command }}"
+        method: GET
+        headers:
+          X-PAN-KEY: "{{ api_key }}"
+        validate_certs: no
+      register: command_output
+
+    - name: Print Command Output
+      debug:
+        var: command_output.json
