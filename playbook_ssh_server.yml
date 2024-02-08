@@ -1,0 +1,18 @@
+---
+- name: Execute SSH command with prompt authentication
+  hosts: localhost
+  gather_facts: no
+
+  vars_prompt:
+    - name: ssh_username
+      prompt: "Enter SSH Username:"
+      private: no
+    - name: ssh_password
+      prompt: "Enter SSH Password:"
+      private: yes
+
+  tasks:
+    - name: Execute SSH command with prompt authentication
+      command: ssh {{ ssh_username }}@{{ server }} -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o PreferredAuthentications=password -o PubkeyAuthentication=no -o PasswordAuthentication=yes
+      vars:
+        ansible_ssh_pass: "{{ ssh_password }}"
