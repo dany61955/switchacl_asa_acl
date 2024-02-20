@@ -4,7 +4,11 @@ def trim_json(input_file, output_file, attributes):
     with open(input_file, 'r') as f:
         data = json.load(f)
 
-    trimmed_data = [{attr: entry[attr] for attr in attributes} for entry in data]
+    trimmed_data = []
+    for entry in data:
+        if isinstance(entry, dict):
+            trimmed_entry = {attr: entry[attr] for attr in attributes if attr in entry}
+            trimmed_data.append(trimmed_entry)
 
     with open(output_file, 'w') as f:
         json.dump(trimmed_data, f, indent=4)
