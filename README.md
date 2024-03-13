@@ -1,6 +1,7 @@
 # switchacl_asa_acl
 Conversion of Cisco switch ACL to Cisco ASA ACL
 
+Regex: (permit|deny)\s+ip\s+(?:host|[\d.]+)\s+(?:host|[\d.]+)\s+(?:host|[\d.]+)\s+(?:host|[\d.]+)|\b(permit|deny)\s+ip\s+(?:host|[\d.]+)\s+(?:[\d.]+)\s+(?:[\d.]+)\s+(?:[\d.]+)|\b(permit|deny)\s+ip\s+(?:[\d.]+)\s+(?:[\d.]+)\s+(?:[\d.]+)\s+(?:[\d.]+)|\b(permit|deny)\s+ip\s+(?:[\d.]+)\s+(?:[\d.]+)\s+(?:[\d.]+)\s+(?:host|[\d.]+)
 
 Advantages
 Certainly! The network automation team plays a crucial role in modern IT environments, bringing several key values to the table. Here are some points highlighting the values they bring:
