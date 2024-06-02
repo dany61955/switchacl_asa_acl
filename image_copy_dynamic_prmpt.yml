@@ -1,0 +1,29 @@
+---
+- name: Copy a file to Cisco device and handle overwrite prompt
+  hosts: cisco_devices
+  gather_facts: no
+  vars:
+    source_file: /path/to/local/file
+    destination_file: flash:/destination/file
+
+  tasks:
+    - name: Check if the destination file exists on the Cisco device
+      cisco.ios.ios_command:
+        commands:
+          - dir {{ destination_file }}
+      register: file_check
+      ignore_errors: yes
+
+    - name: Copy file to device with conditional prompt handling
+      cisco.ios.ios_command:
+        commands:
+          - copy tftp://{{ ansible_host }}/{{ source_file }} {{ destination_file }}
+        prompts: >
+          {%- set prompts = [] -%}
+          {%- if 'No such file or directory' not in file_check.stdout -%}
+          {%-   prompts.append({'prompt': 'Destination filename.*', 'answer': destination_file}) -%}
+          {%-   prompts.append({'prompt': 'Overwrite.*', 'answer': 'yes'}) -%}
+          {%- else -%}
+          {%-   prompts.append({'prompt': 'Destination filename.*', 'answer': destination_file}) -%}
+          {%- endif -%}
+          {{ prompts }}
