@@ -1,13 +1,25 @@
-import csv
 import requests
+import csv
 
-# Replace with your Cisco API access token
-API_TOKEN = 'YOUR_ACCESS_TOKEN'
+client_id = 'YOUR_CLIENT_ID'
+client_secret = 'YOUR_CLIENT_SECRET'
+token_url = 'https://cloudsso.cisco.com/as/token.oauth2'
+api_base_url = 'https://api.cisco.com/supporttools/eox/rest/5/EOXByProductID'
 
-def check_eol_eos(part_number):
-    url = f"https://api.cisco.com/supporttools/eox/rest/5/EOXByProductID/{part_number}?responseencoding=json"
+def get_access_token(client_id, client_secret):
+    payload = {
+        'grant_type': 'client_credentials',
+        'client_id': client_id,
+        'client_secret': client_secret
+    }
+    response = requests.post(token_url, data=payload)
+    response.raise_for_status()
+    return response.json().get('access_token')
+
+def check_eol_eos(part_number, token):
+    url = f"{api_base_url}/{part_number}?responseencoding=json"
     headers = {
-        'Authorization': f'Bearer {API_TOKEN}',
+        'Authorization': f'Bearer {token}',
         'Accept': 'application/json'
     }
     response = requests.get(url, headers=headers)
@@ -20,6 +32,7 @@ def check_eol_eos(part_number):
         return 'No', 'No'
 
 def main(input_file, output_file):
+    token = get_access_token(client_id, client_secret)
     with open(input_file, 'r') as infile, open(output_file, 'w', newline='') as outfile:
         csv_reader = csv.reader(infile)
         csv_writer = csv.writer(outfile)
@@ -27,7 +40,7 @@ def main(input_file, output_file):
 
         for row in csv_reader:
             part_number = row[0]
-            eol, eos = check_eol_eos(part_number)
+            eol, eos = check_eol_eos(part_number, token)
             csv_writer.writerow([part_number, eol, eos])
 
 if __name__ == "__main__":
