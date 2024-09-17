@@ -1,6 +1,8 @@
 import paramiko
 import time
 import getpass
+from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Function to read commands from a file
 def read_commands_from_file(filename):
@@ -12,8 +14,8 @@ def read_device_list(filename):
     with open(filename, 'r') as file:
         return [line.strip() for line in file.readlines()]
 
-# Function to send commands to a device via SSH and capture logs with prompt
-def send_commands_to_device(hostname, username, password, commands):
+# Function to send configuration commands to a device via SSH
+def send_config_commands_to_device(hostname, username, password, commands):
     logs = []
     success = False
 
@@ -27,19 +29,31 @@ def send_commands_to_device(hostname, username, password, commands):
         remote_conn = ssh.invoke_shell()
         time.sleep(1)
         
-        # Getting the initial device prompt
+        # Get the device prompt (e.g., "hostname#")
+        remote_conn.send("\n")
+        time.sleep(1)
         output = remote_conn.recv(65535).decode('utf-8')
-        logs.append(f"{hostname}#")  # Initial prompt
+        logs.append(output.strip())
         
-        # Sending commands one by one
+        # Enter global configuration mode
+        remote_conn.send("configure terminal\n")
+        time.sleep(1)
+        output = remote_conn.recv(65535).decode('utf-8').strip()
+        logs.append(output)
+        
+        # Send configuration commands one by one
         for command in commands:
             remote_conn.send(command + "\n")
-            time.sleep(2)  # Adjust the time delay if needed
-            output = remote_conn.recv(65535).decode('utf-8')
-            logs.append(f"{hostname}(config)#{command}")
+            time.sleep(2)  # Adjust the delay if needed
+            output = remote_conn.recv(65535).decode('utf-8').strip()
+            logs.append(output)
         
-        # After commands, get the final prompt
-        logs.append(f"{hostname}#")
+        # Exit configuration mode
+        remote_conn.send("end\n")
+        time.sleep(1)
+        output = remote_conn.recv(65535).decode('utf-8').strip()
+        logs.append(output)
+        
         success = True
     except Exception as e:
         logs.append(f"Error on {hostname}: {str(e)}")
@@ -54,19 +68,37 @@ def configure_snmp(hostname, username, password, snmpv2_commands, snmpv3_command
     
     # Step 1: Remove SNMPv2
     logs.append(f"--- Removing SNMPv2 on {hostname} ---")
-    snmpv2_logs, success_remove = send_commands_to_device(hostname, username, password, snmpv2_commands)
+    snmpv2_logs, success_remove = send_config_commands_to_device(hostname, username, password, snmpv2_commands)
     logs.extend(snmpv2_logs)
     
     # Step 2: Add SNMPv3
     logs.append(f"--- Configuring SNMPv3 on {hostname} ---")
-    snmpv3_logs, success_add = send_commands_to_device(hostname, username, password, snmpv3_commands)
+    snmpv3_logs, success_add = send_config_commands_to_device(hostname, username, password, snmpv3_commands)
     logs.extend(snmpv3_logs)
     
     return logs, success_remove and success_add
 
+# Function to handle device configuration in parallel
+def configure_device_in_parallel(device, username, password, snmpv2_commands, snmpv3_commands):
+    start_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    logs = [f"=== Configuring device {device} ===", f"Start time: {start_time}"]
+    
+    device_logs, success = configure_snmp(device, username, password, snmpv2_commands, snmpv3_commands)
+    logs.extend(device_logs)
+    
+    end_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    logs.append(f"End time: {end_time}")
+    
+    if success:
+        logs.append(f"Device {device} configured successfully.\n")
+    else:
+        logs.append(f"Device {device} configuration failed.\n")
+    
+    return logs, success
+
 # Main function
 def main():
-    # File paths are direct relative paths
+    # File paths are now direct relative paths
     snmpv2_file = "snmpv2_remove.txt"
     snmpv3_file = "snmpv3_add.txt"
     device_list_file = "input_device.txt"
@@ -80,6 +112,9 @@ def main():
     username = input("Enter device username: ")
     password = getpass.getpass("Enter device password: ")
     
+    # Set the parallel processing count as a variable
+    parallel_count = int(input("Enter the number of devices to configure in parallel: "))
+    
     # Logs and report
     logs = []
     report = {
@@ -87,18 +122,22 @@ def main():
         "failed": 0
     }
     
-    # Processing each device
-    for device in device_list:
-        logs.append(f"=== Configuring device {device} ===")
-        device_logs, success = configure_snmp(device, username, password, snmpv2_commands, snmpv3_commands)
-        logs.extend(device_logs)
+    # Using ThreadPoolExecutor for parallel processing
+    with ThreadPoolExecutor(max_workers=parallel_count) as executor:
+        future_to_device = {executor.submit(configure_device_in_parallel, device, username, password, snmpv2_commands, snmpv3_commands): device for device in device_list}
         
-        if success:
-            report["success"] += 1
-            logs.append(f"Device {device} configured successfully.\n")
-        else:
-            report["failed"] += 1
-            logs.append(f"Device {device} configuration failed.\n")
+        for future in as_completed(future_to_device):
+            device = future_to_device[future]
+            try:
+                device_logs, success = future.result()
+                logs.extend(device_logs)
+                
+                if success:
+                    report["success"] += 1
+                else:
+                    report["failed"] += 1
+            except Exception as exc:
+                logs.append(f"Error configuring {device}: {exc}")
     
     # Writing logs to file
     with open("snmp_configuration_logs.txt", "w") as log_file:
