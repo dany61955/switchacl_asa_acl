@@ -1,0 +1,31 @@
+---
+- name: Copy file from TFTP to Cisco device
+  hosts: cisco_devices
+  gather_facts: no
+  tasks:
+    - name: Record start time
+      set_fact:
+        start_time: "{{ ansible_date_time.iso8601 }}"
+    
+    - name: Copy file from TFTP to device
+      ios_command:
+        commands:
+          - copy tftp://{{ tftp_server }}/{{ file_name }} disk:/
+      vars:
+        tftp_server: "x.x.x.x"  # Replace with your TFTP server IP
+        file_name: "your_file_name"  # Replace with your file name
+      register: copy_result
+
+    - name: Record end time
+      set_fact:
+        end_time: "{{ ansible_date_time.iso8601 }}"
+
+    - name: Calculate duration
+      set_fact:
+        duration: "{{ (end_time | to_datetime) - (start_time | to_datetime) }}"
+
+    - name: Display copy result and duration
+      debug:
+        msg: 
+          - "Copy Result: {{ copy_result }}"
+          - "Duration: {{ duration }}"
