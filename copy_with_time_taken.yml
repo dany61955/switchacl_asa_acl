@@ -1,0 +1,40 @@
+- name: Copy Cisco IOS image with timing
+  hosts: ios_devices
+  gather_facts: no
+  tasks:
+    - name: Record start time
+      ansible.builtin.date_time:
+        date_format: "%Y-%m-%d %H:%M:%S"
+      register: start_time
+
+    - name: Start the image copy
+      ios_command:
+        commands:
+          - copy tftp://<server-ip>/<image-name> flash:<destination>
+      register: copy_start_output
+
+    - name: Wait for copy operation to complete
+      ios_command:
+        commands:
+          - dir flash:
+      register: copy_status
+      until: "'<image-name>' in copy_status.stdout"
+      retries: 60  # Adjust based on expected copy duration
+      delay: 30    # Check every 30 seconds
+
+    - name: Record end time
+      ansible.builtin.date_time:
+        date_format: "%Y-%m-%d %H:%M:%S"
+      register: end_time
+
+    - name: Calculate elapsed time
+      ansible.builtin.set_fact:
+        elapsed_time: >-
+          {{
+            (ansible_date_time.strptime(end_time.date_time, '%Y-%m-%d %H:%M:%S')
+            - ansible_date_time.strptime(start_time.date_time, '%Y-%m-%d %H:%M:%S')).seconds
+          }}
+
+    - name: Display elapsed time
+      ansible.builtin.debug:
+        msg: "Image copy operation took {{ elapsed_time }} seconds."
